@@ -19,7 +19,7 @@ on:
       isMainOrRelease:
         description: 'This build is for the main branch or a release (set to "false" for development branch builds)'
         required: true
-        default: 'true'
+        default: 'false'
         type: choice
         options:
         - 'true'
@@ -29,7 +29,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  NAMESPACE: galasa-dev
+  NAMESPACE: jackyhodev
   BRANCH: ${{ github.ref_name }}
 
 jobs:
@@ -79,7 +79,7 @@ jobs:
         env:
           GPG_KEY_BASE64: ${{ secrets.GPG_KEY }}
         run : |
-          echo $GPG_KEY_BASE64 |  base64 --decode > /home/runner/work/secrets/galasa.gpg
+          sudo echo "${GPG_KEY_BASE64// /}" | base64 --decode > /home/runner/work/secrets/galasa.gpg
           
       # Set up Maven GPG directory
       - name: Make GPG home directory
@@ -103,6 +103,7 @@ jobs:
         run: |
           set -o pipefail
           mvn -f galasa-maven-plugin/pom.xml deploy -X \
+          -Dgpg.skip=true \
           -Dgalasa.source.repo=https://development.galasa.dev/${{ env.BRANCH }}/maven-repo/gradle \
           -Dgalasa.central.repo=https://repo.maven.apache.org/maven2/ \
           -Dgalasa.release.repo=file:${{ github.workspace }}/repo \
@@ -116,6 +117,7 @@ jobs:
         run: |
           set -o pipefail
           mvn -f galasa-maven-plugin/pom.xml deploy -X \
+          -Dgpg.skip=true \
           -Dgalasa.source.repo=https://development.galasa.dev/${{ env.BRANCH }}/maven-repo/gradle \
           -Dgalasa.central.repo=https://repo.maven.apache.org/maven2/ \
           -Dgalasa.release.repo=file:${{ github.workspace }}/repo \
@@ -144,8 +146,8 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: galasa-team
-          password: ${{ secrets.GALASA_TEAM_WRITE_PACKAGES_TOKEN }}
+          username: jackyhodev
+          password: ${{ secrets.GH_TOKEN }}
 
       - name: Extract metadata for Maven image
         id: metadata
@@ -168,18 +170,18 @@ jobs:
 
       # Recycle the development Maven registry app in ArgoCD
       # Authenticate using a token passed in as an environment variable
-      - name: Recycle application in ArgoCD
-        env: 
-          ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_TOKEN }}
-        run: |
-          docker run --env ARGOCD_AUTH_TOKEN=${{ env.ARGOCD_AUTH_TOKEN }} --rm -v ${{ github.workspace }}:/var/workspace ghcr.io/galasa-dev/argocdcli:main app actions run ${{ env.BRANCH }}-maven-repos restart --kind Deployment --resource-name maven-${{ env.BRANCH }} --server argocd.galasa.dev
+      #- name: Recycle application in ArgoCD
+        #env: 
+          #ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_TOKEN }}
+        #run: |
+          #docker run --env ARGOCD_AUTH_TOKEN=${{ env.ARGOCD_AUTH_TOKEN }} --rm -v ${{ github.workspace }}:/var/workspace ghcr.io/galasa-dev/argocdcli:main app actions run ${{ env.BRANCH }}-maven-repos restart --kind Deployment --resource-name maven-${{ env.BRANCH }} --server argocd.galasa.dev
       
       # Wait for the application to show as healthy in ArgoCD
-      - name: Wait for app health in ArgoCD
-        env: 
-          ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_TOKEN }}
-        run: |
-          docker run --env ARGOCD_AUTH_TOKEN=${{ env.ARGOCD_AUTH_TOKEN }} --rm -v ${{ github.workspace }}:/var/workspace ghcr.io/galasa-dev/argocdcli:main app wait ${{ env.BRANCH }}-maven-repos --resource apps:Deployment:maven-${{ env.BRANCH }} --health --server argocd.galasa.dev
+      #- name: Wait for app health in ArgoCD
+        #env: 
+          #ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_TOKEN }}
+        #run: |
+          #docker run --env ARGOCD_AUTH_TOKEN=${{ env.ARGOCD_AUTH_TOKEN }} --rm -v ${{ github.workspace }}:/var/workspace ghcr.io/galasa-dev/argocdcli:main app wait ${{ env.BRANCH }}-maven-repos --resource apps:Deployment:maven-${{ env.BRANCH }} --health --server argocd.galasa.dev
 
   trigger-framework-workflow:
     name: Trigger Framework workflow
@@ -190,16 +192,16 @@ jobs:
       - name: Trigger Framework workflow dispatch event with GitHub CLI
         if: github.event_name == 'push'
         env:
-          GH_TOKEN: ${{ secrets.GALASA_TEAM_GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          gh workflow run build.yaml --repo https://github.com/galasa-dev/framework
+          gh workflow run build.yaml --repo https://github.com/jackyhodev/framework
 
       - name: Trigger Framework workflow dispatch event with GitHub CLI
         if: github.event_name == 'workflow_dispatch'
         env:
-          GH_TOKEN: ${{ secrets.GALASA_TEAM_GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN}}
         run: |
-          gh workflow run build.yaml --repo https://github.com/galasa-dev/framework --ref ${{ env.BRANCH }} -f jacocoEnabled=${{ inputs.jacocoEnabled }} -f isMainOrRelease=${{ inputs.isMainOrRelease }}
+          gh workflow run build.yaml --repo https://github.com/jackyhodev/framework --ref ${{ env.BRANCH }} -f jacocoEnabled=${{ inputs.jacocoEnabled }} -f isMainOrRelease=${{ inputs.isMainOrRelease }}
 
   report-failure:
     name: Report failure in workflow
